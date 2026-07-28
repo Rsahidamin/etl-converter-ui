@@ -10,7 +10,9 @@ import {
 // 🌐 1. REPLACE THIS with your exact Ngrok HTTPS link!
 //const API_BASE_URL = 'https://numbing-walrus-unwitting.ngrok-free.dev';
 
-const API_BASE_URL = "https://split-mel-incorporate-streaming.trycloudflare.com";
+const API_BASE_URL = "https://paradise-portable-allen-locate.trycloudflare.com";
+
+
 
 // 🔒 2. This exact header permanently bypasses the Ngrok warning screen for your team
 const axiosConfig = {
