@@ -9,8 +9,7 @@ import {
 
 // 🌐 1. REPLACE THIS with your exact Ngrok HTTPS link!
 //const API_BASE_URL = 'https://numbing-walrus-unwitting.ngrok-free.dev';
-
-const API_BASE_URL = "https://paradise-portable-allen-locate.trycloudflare.com";
+const API_BASE_URL = "https://paradise-portable-direction-downtown.trycloudflare.com";
 
 
 
