@@ -1,7 +1,7 @@
 {
   "name": "etl-pcap-frontend",
   "version": "1.0.0",
-  "homepage": "https://rsahidamin.github.io/etl-converter-ui",
+  "homepage": ".",
   "dependencies": {
     "axios": "^1.6.2",
     "framer-motion": "^10.16.4",
