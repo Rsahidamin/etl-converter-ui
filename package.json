@@ -1,7 +1,7 @@
 {
   "name": "etl-pcap-frontend",
   "version": "1.0.0",
-  "homepage": "https://rashidaminbuhroo-ux.github.io/etl-converter-ui",
+  "homepage": "https://rsahidamin.github.io/etl-converter-ui",
   "dependencies": {
     "axios": "^1.6.2",
     "framer-motion": "^10.16.4",
@@ -14,10 +14,13 @@
   },
   "scripts": {
     "start": "react-scripts start",
-    "build": "react-scripts build"
+    "build": "react-scripts build",
+    "predeploy": "npm run build",
+    "deploy": "gh-pages -d build"
   },
   "devDependencies": {
     "autoprefixer": "^10.4.16",
+    "gh-pages": "^6.1.1",
     "postcss": "^8.4.31",
     "tailwindcss": "^3.3.5"
   },
