@@ -314,7 +314,7 @@ export default function App() {
         {/* Footer */}
         <footer className={`py-10 border-t mt-auto transition-all duration-500 ${darkMode ? 'border-white/5 bg-[#0b0e14]/50' : 'border-slate-200 bg-slate-100'}`}>
           <div className="max-w-6xl mx-auto px-6 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            <p>© 2026 ETL CONVERTER | NETSKOPE ENTERPRISE DEPLOYMENT</p>
+            <p>© 2026 ETL CONVERTER </p>
             <div className="flex items-center gap-2">
                 <span className="italic opacity-70">Designed by:</span>
                 <span className="text-blue-500 tracking-widest font-bold">Sahil Amin</span>
