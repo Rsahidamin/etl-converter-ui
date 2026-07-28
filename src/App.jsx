@@ -4,17 +4,12 @@ import axios from 'axios';
 import { Toaster, toast } from 'react-hot-toast';
 import { motion, AnimatePresence } from 'framer-motion';
 import { 
-  Upload, FileCode, Activity, Zap, Sun, Moon, ShieldCheck, Cpu, FolderHeart, History, Download 
+  Upload, FileCode, Activity, Zap, Sun, Moon, ShieldCheck, Cpu, FolderHeart, History, Download, Server
 } from 'lucide-react';
 
-// 🌐 1. REPLACE THIS with your exact Ngrok HTTPS link!
-//const API_BASE_URL = 'https://numbing-walrus-unwitting.ngrok-free.dev';
-//const API_BASE_URL = "https://shelter-korean-bus-demonstrate.trycloudflare.com";
+// 🌐 Cloudflare Active Tunnel URL
 const API_BASE_URL = "https://massive-protein-globe-jacksonville.trycloudflare.com";
 
-
-
-// 🔒 2. This exact header permanently bypasses the Ngrok warning screen for your team
 const axiosConfig = {
   headers: {
     'ngrok-skip-browser-warning': 'true'
@@ -51,7 +46,8 @@ export default function App() {
   const handleDownload = async (url, filename) => {
     const loadingToast = toast.loading("Preparing secure download...");
     try {
-      const response = await axios.get(url, {
+      const targetUrl = url || downloadUrl;
+      const response = await axios.get(targetUrl, {
         headers: axiosConfig.headers,
         responseType: 'blob',
       });
@@ -60,7 +56,8 @@ export default function App() {
       const link = document.createElement('a');
       link.href = blobUrl;
       
-      const finalName = filename.toLowerCase().endsWith('.pcap') ? filename : `${filename.split('.')[0]}.pcap`;
+      const cleanName = filename ? filename.split('.')[0] : 'converted_trace';
+      const finalName = `${cleanName}.pcapng`;
       link.setAttribute('download', finalName);
       document.body.appendChild(link);
       link.click();
@@ -75,7 +72,7 @@ export default function App() {
 
   const onDrop = useCallback((acceptedFiles) => {
     const selected = acceptedFiles[0];
-    if (selected?.name.endsWith('.etl')) {
+    if (selected?.name.toLowerCase().endsWith('.etl')) {
       setFile(selected); setDownloadUrl(''); setProgress(0); setStatus('idle');
       toast.success('ETL File Ready');
     } else {
@@ -89,15 +86,18 @@ export default function App() {
 
   const handleConvert = async () => {
     if (!vdiOnline) {
-      toast.error("Cannot convert: VDI engine is offline.");
+      toast.error("Cannot convert: Netskope VDI server is offline.");
       return;
     }
     if (!file) return;
-    setStatus('uploading'); setProgress(15);
+    
+    setStatus('converting'); 
+    setProgress(30);
     const formData = new FormData();
     formData.append('file', file);
     
     try {
+      // Direct call to convert - backend processes etl2pcapng and returns final URLs immediately
       const res = await axios.post(`${API_BASE_URL}/api/convert`, formData, {
         headers: { 
           ...axiosConfig.headers,
@@ -105,38 +105,37 @@ export default function App() {
         },
         timeout: 0 
       });
-      
-      const taskId = res.data.taskId;
-      setStatus('converting');
 
-      const interval = setInterval(async () => {
-        try {
-          const statusRes = await axios.get(`${API_BASE_URL}/api/status/${taskId}`, {
-            headers: axiosConfig.headers
-          });
-          
-          if (statusRes.data.progress > progress) setProgress(statusRes.data.progress);
-          
-          if (statusRes.data.status === 'completed') {
-            clearInterval(interval);
-            
-            const rawFilename = `${taskId}.pcap`;
-            const fullUrl = `${API_BASE_URL}/api/download/${rawFilename}`;
-            
-            setDownloadUrl(fullUrl); 
-            setStatus('completed');
-            
-            setHistory(prev => [{ id: taskId, name: file.name, size: (file.size / 1024 / 1024).toFixed(2), url: fullUrl }, ...prev]);
-            toast.success('Conversion Successful');
-          }
-        } catch (e) { clearInterval(interval); setStatus('idle'); }
-      }, 2000); 
-    } catch (err) { setStatus('idle'); toast.error('VDI Transmission Timeout'); }
+      if (res.data.success) {
+        setProgress(100);
+        const finalDownloadUrl = res.data.downloadUrl || res.data.pcapUrl || `${API_BASE_URL}/api/download/${res.data.filename}`;
+        setDownloadUrl(finalDownloadUrl); 
+        setStatus('completed');
+        
+        setHistory(prev => [
+          { 
+            id: res.data.id || Date.now(), 
+            name: file.name, 
+            size: (file.size / 1024 / 1024).toFixed(2), 
+            url: finalDownloadUrl 
+          }, 
+          ...prev
+        ]);
+        toast.success('Conversion Successful!');
+      } else {
+        throw new Error("Conversion failed");
+      }
+    } catch (err) { 
+      setStatus('idle'); 
+      setProgress(0);
+      toast.error('Netskope Server Transmission Error'); 
+    }
   };
 
   return (
     <div className={`min-h-screen transition-colors duration-500 font-sans selection:bg-blue-500/30 relative overflow-x-hidden ${darkMode ? 'bg-[#07090e] text-slate-200' : 'bg-slate-50 text-slate-800'}`}>
       
+      {/* Background Grids */}
       <div className="absolute inset-0 pointer-events-none z-0">
         <div 
           className="absolute inset-0 opacity-[0.03] transition-opacity duration-500" 
@@ -159,9 +158,13 @@ export default function App() {
       <div className="relative z-10 min-h-screen flex flex-col">
         <Toaster position="top-right" />
         
+        {/* Navigation Header */}
         <nav className={`border-b p-6 shadow-sm sticky top-0 backdrop-blur-md z-50 transition-colors duration-500 ${darkMode ? 'bg-[#0d1117]/80 border-white/5' : 'bg-white/80 border-slate-200'}`}>
           <div className="max-w-6xl mx-auto flex justify-between items-center">
-            <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3">
+              <div className="p-2 bg-blue-600/10 rounded-xl border border-blue-500/20">
+                <Server className="w-5 h-5 text-blue-500" />
+              </div>
               <h1 className={`text-xl font-bold tracking-tight uppercase ${darkMode ? 'text-white' : 'text-slate-900'}`}>
                 ETL Converter
               </h1>
@@ -175,16 +178,17 @@ export default function App() {
                 {darkMode ? <Sun size={18} /> : <Moon size={18} />}
               </button>
 
-              <div className="flex items-center gap-2">
-                <div className={`w-3 h-3 rounded-full transition-all duration-300 ${vdiOnline ? 'bg-green-500 animate-pulse' : 'bg-red-500'}`} />
-                <span className={`text-xs font-bold uppercase tracking-wider transition-colors duration-300 ${vdiOnline ? 'text-green-500' : 'text-red-500'}`}>
-                  {vdiOnline ? 'VDI Online' : 'VDI Down'}
+              <div className="flex items-center gap-2.5 px-3 py-1.5 rounded-full border border-white/5 bg-white/[0.02]">
+                <div className={`w-2.5 h-2.5 rounded-full transition-all duration-300 ${vdiOnline ? 'bg-emerald-500 animate-pulse shadow-lg shadow-emerald-500/50' : 'bg-rose-500'}`} />
+                <span className={`text-xs font-bold uppercase tracking-wider transition-colors duration-300 ${vdiOnline ? 'text-emerald-500' : 'text-rose-500'}`}>
+                  {vdiOnline ? 'Netskope Server Online' : 'Netskope Server Offline'}
                 </span>
               </div>
             </div>
           </div>
         </nav>
 
+        {/* Main Interface */}
         <main className="max-w-6xl mx-auto px-6 py-12 grid lg:grid-cols-3 gap-8 flex-grow w-full items-start">
           
           <div className="lg:col-span-2 space-y-6">
@@ -193,43 +197,46 @@ export default function App() {
                 <Zap className="text-blue-500 w-5 h-5" /> PCAP Reconstruction
               </h2>
 
+              {/* Redesigned Netskope Step Cards */}
               <div className="grid md:grid-cols-3 gap-4 mb-8">
-                <div className={`p-4 rounded-xl border space-y-1 ${darkMode ? 'bg-white/[0.01] border-white/5' : 'bg-slate-50 border-slate-200/60'}`}>
-                  <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1.5"><ShieldCheck size={12}/> 1. Upload</span>
-                  <p className="text-[11px] leading-relaxed opacity-70">Pass .ETL files straight to your dedicated AWS Cloud engine.</p>
+                <div className={`p-4 rounded-2xl border space-y-1.5 transition-all hover:border-blue-500/30 ${darkMode ? 'bg-white/[0.015] border-white/5' : 'bg-slate-50 border-slate-200/60'}`}>
+                  <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1.5"><ShieldCheck size={13}/> 1. Upload</span>
+                  <p className="text-[11px] leading-relaxed opacity-75">Pass .ETL files directly to your secure Netskope Server pipeline.</p>
                 </div>
-                <div className={`p-4 rounded-xl border space-y-1 ${darkMode ? 'bg-white/[0.01] border-white/5' : 'bg-slate-50 border-slate-200/60'}`}>
-                  <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1.5"><Cpu size={12}/> 2. Convert</span>
-                  <p className="text-[11px] leading-relaxed opacity-70">VDI background processing runs native trace compilation 24/7.</p>
+                <div className={`p-4 rounded-2xl border space-y-1.5 transition-all hover:border-blue-500/30 ${darkMode ? 'bg-white/[0.015] border-white/5' : 'bg-slate-50 border-slate-200/60'}`}>
+                  <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1.5"><Cpu size={13}/> 2. Convert</span>
+                  <p className="text-[11px] leading-relaxed opacity-75">On-premise Netskope background processing runs native trace compilation 24/7.</p>
                 </div>
-                <div className={`p-4 rounded-xl border space-y-1 ${darkMode ? 'bg-white/[0.01] border-white/5' : 'bg-slate-50 border-slate-200/60'}`}>
-                  <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1.5"><FolderHeart size={12}/> 3. Download</span>
-                  <p className="text-[11px] leading-relaxed opacity-70">Retrieve Wireshark-ready .PCAP traces instantly to local tabs.</p>
+                <div className={`p-4 rounded-2xl border space-y-1.5 transition-all hover:border-blue-500/30 ${darkMode ? 'bg-white/[0.015] border-white/5' : 'bg-slate-50 border-slate-200/60'}`}>
+                  <span className="text-[10px] font-bold text-blue-500 uppercase tracking-widest flex items-center gap-1.5"><FolderHeart size={13}/> 3. Download</span>
+                  <p className="text-[11px] leading-relaxed opacity-75">Retrieve Wireshark-ready .PCAPNG traces instantly to your local machine.</p>
                 </div>
               </div>
               
-              <div {...getRootProps()} className={`group border-2 border-dashed rounded-2xl p-16 text-center cursor-pointer transition-all duration-300 ${isDragActive ? 'border-blue-500 bg-blue-500/5' : darkMode ? 'border-slate-800 hover:border-blue-500/40 hover:bg-white/[0.01]' : 'border-slate-300 hover:border-blue-500/40 hover:bg-slate-50'}`}>
+              {/* Dropzone File Upload */}
+              <div {...getRootProps()} className={`group border-2 border-dashed rounded-2xl p-14 text-center cursor-pointer transition-all duration-300 ${isDragActive ? 'border-blue-500 bg-blue-500/5' : darkMode ? 'border-slate-800 hover:border-blue-500/40 hover:bg-white/[0.01]' : 'border-slate-300 hover:border-blue-500/40 hover:bg-slate-50'}`}>
                 <input {...getInputProps()} />
                 <Upload className="w-12 h-12 mx-auto mb-4 text-slate-400 group-hover:text-blue-500 transition-colors duration-300" />
-                <p className="text-lg">Drop ETL trace or <span className="text-blue-500 font-semibold">browse files</span></p>
+                <p className="text-lg font-medium">Drop ETL trace or <span className="text-blue-500 font-semibold underline decoration-2 underline-offset-4">browse files</span></p>
               </div>
 
+              {/* Selected File & Progress Bar */}
               <AnimatePresence>
                 {file && (
                   <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mt-8">
                     <div className={`p-5 rounded-2xl flex justify-between items-center border transition-colors duration-500 ${darkMode ? 'bg-black/30 border-white/5' : 'bg-slate-100 border-slate-200'}`}>
                       <div className="flex items-center gap-4">
-                        <div className="p-3 bg-blue-500/10 rounded-xl"><FileCode className="text-blue-400 w-5 h-5" /></div>
+                        <div className="p-3 bg-blue-500/10 rounded-xl border border-blue-500/20"><FileCode className="text-blue-400 w-5 h-5" /></div>
                         <div>
                           <p className={`text-sm font-bold truncate max-w-[250px] ${darkMode ? 'text-white' : 'text-slate-900'}`}>{file.name}</p>
-                          <p className="text-[10px] text-slate-400">{(file.size / 1024).toFixed(1)} KB</p>
+                          <p className="text-[10px] text-slate-400 font-mono">{(file.size / 1024 / 1024).toFixed(2)} MB</p>
                         </div>
                       </div>
                       {status === 'idle' ? (
                         <button 
                           onClick={handleConvert} 
                           disabled={!vdiOnline}
-                          className={`px-8 py-3 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95 ${!vdiOnline ? 'bg-slate-400 cursor-not-allowed text-slate-100 shadow-none' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20'}`}
+                          className={`px-8 py-3 rounded-xl font-bold text-sm shadow-lg transition-all active:scale-95 ${!vdiOnline ? 'bg-slate-700 cursor-not-allowed text-slate-400 shadow-none' : 'bg-blue-600 hover:bg-blue-500 text-white shadow-blue-600/20'}`}
                         >
                           INITIATE CONVERSION
                         </button>
@@ -254,18 +261,19 @@ export default function App() {
                 )}
               </AnimatePresence>
 
+              {/* Download Ready Section */}
               {status === 'completed' && (
-                <motion.div initial={{ scale: 0.9, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className={`mt-6 p-6 border rounded-2xl flex justify-between items-center transition-colors duration-500 ${darkMode ? 'bg-green-500/5 border-green-500/20' : 'bg-green-50/50 border-green-200'}`}>
-                  <div className="flex items-center gap-3 text-green-600">
-                    <div className="w-10 h-10 rounded-full bg-green-500/10 flex items-center justify-center font-bold text-lg">✓</div>
+                <motion.div initial={{ scale: 0.95, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} className={`mt-6 p-6 border rounded-2xl flex justify-between items-center transition-colors duration-500 ${darkMode ? 'bg-emerald-500/5 border-emerald-500/20' : 'bg-emerald-50/50 border-emerald-200'}`}>
+                  <div className="flex items-center gap-3 text-emerald-500">
+                    <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center font-bold text-lg">✓</div>
                     <div>
-                      <p className="font-bold text-sm">Processing Complete</p>
-                      <p className="text-[10px] opacity-70 italic font-mono uppercase">AWS Storage Lifecycle Flagged: Purge scheduled in 1 Hour</p>
+                      <p className="font-bold text-sm text-emerald-400">Processing Complete</p>
+                      <p className="text-[10px] opacity-70 italic font-mono uppercase">Netskope Storage Lifecycle Flagged: Purge scheduled in 1 Hour</p>
                     </div>
                   </div>
                   <button 
                     onClick={() => handleDownload(downloadUrl, file.name)}
-                    className="bg-green-600 hover:bg-green-500 text-white px-8 py-3 rounded-xl font-bold text-sm transition-colors shadow-lg shadow-green-600/20 active:scale-95"
+                    className="bg-emerald-600 hover:bg-emerald-500 text-white px-8 py-3 rounded-xl font-bold text-sm transition-all shadow-lg shadow-emerald-600/20 active:scale-95"
                   >
                     DOWNLOAD PCAP
                   </button>
@@ -274,6 +282,7 @@ export default function App() {
             </div>
           </div>
 
+          {/* Sidebar - Recent Sessions */}
           <div className="lg:col-span-1">
             <div className={`border rounded-3xl p-6 shadow-xl transition-all duration-500 backdrop-blur-sm ${darkMode ? 'bg-[#12161f]/90 border-white/5' : 'bg-white/90 border-slate-200'}`}>
               <h3 className="text-xs font-bold text-slate-400 uppercase mb-5 flex items-center gap-2 tracking-widest">
@@ -283,7 +292,7 @@ export default function App() {
                 {history.length > 0 ? history.map((h, i) => (
                   <div key={i} className={`flex justify-between items-center p-3 rounded-xl border transition-all duration-300 ${darkMode ? 'bg-white/[0.02] border-white/5 hover:border-blue-500/30' : 'bg-slate-50 border-slate-200 hover:border-blue-500/30'}`}>
                     <div className="flex items-center gap-3 truncate">
-                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-[8px] shrink-0">PCAP</div>
+                      <div className="w-8 h-8 rounded-lg bg-blue-500/10 flex items-center justify-center text-blue-500 font-bold text-[9px] shrink-0">PCAP</div>
                       <span className="text-[11px] font-bold truncate">{h.name}</span>
                     </div>
                     <button onClick={() => handleDownload(h.url, h.name)} className="text-slate-400 hover:text-blue-500 transition-colors pl-2 shrink-0">
@@ -302,12 +311,13 @@ export default function App() {
 
         </main>
 
-        <footer className={`py-12 border-t mt-auto transition-all duration-500 ${darkMode ? 'border-white/5 bg-[#0b0e14]/50' : 'border-slate-200 bg-slate-100'}`}>
+        {/* Footer */}
+        <footer className={`py-10 border-t mt-auto transition-all duration-500 ${darkMode ? 'border-white/5 bg-[#0b0e14]/50' : 'border-slate-200 bg-slate-100'}`}>
           <div className="max-w-6xl mx-auto px-6 flex justify-between items-center text-[10px] font-bold uppercase tracking-widest text-slate-400">
-            <p>© 2026 ETL CONVERTER | HOSTED ON AWS</p>
+            <p>© 2026 ETL CONVERTER | NETSKOPE ENTERPRISE DEPLOYMENT</p>
             <div className="flex items-center gap-2">
                 <span className="italic opacity-70">Designed by:</span>
-                <span className="text-blue-500 tracking-widest">Sahil Amin</span>
+                <span className="text-blue-500 tracking-widest font-bold">Sahil Amin</span>
             </div>
           </div>
         </footer>
