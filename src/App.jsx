@@ -7,7 +7,7 @@ import {
   Upload, FileCode, Sun, Moon, Server, X, Trash2, CheckCircle2, Download, History, Sparkles
 } from 'lucide-react';
 
-// Cloudflare Tunnel URL (Preserved from original project)
+// Cloudflare Active Tunnel URL
 const API_BASE_URL = "https://massive-protein-globe-jacksonville.trycloudflare.com";
 
 const axiosConfig = {
@@ -25,7 +25,7 @@ export default function App() {
   const [darkMode, setDarkMode] = useState(true);
   const [vdiOnline, setVdiOnline] = useState(false);
 
-  // Health check polling logic
+  // Health check polling
   useEffect(() => {
     const checkVDIHealth = async () => {
       try {
@@ -33,7 +33,7 @@ export default function App() {
           headers: axiosConfig.headers,
           timeout: 3000 
         });
-        if (res.data.status === 'online') setVdiOnline(true);
+        if (res.data.status === 'online' || res.data.status === 'ok') setVdiOnline(true);
       } catch (e) {
         setVdiOnline(false);
       }
@@ -44,9 +44,9 @@ export default function App() {
     return () => clearInterval(interval);
   }, []);
 
-  // Secure download logic
+  // Secure file download
   const handleDownload = async (url, filename) => {
-    const loadingToast = toast.loading("Preparing secure download...");
+    const loadingToast = toast.loading("Preparing download...");
     try {
       const targetUrl = url || downloadUrl;
       const response = await axios.get(targetUrl, {
@@ -72,14 +72,17 @@ export default function App() {
     }
   };
 
-  // Dropzone handling logic
+  // Dropzone handling
   const onDrop = useCallback((acceptedFiles) => {
     const selected = acceptedFiles[0];
     if (selected?.name.toLowerCase().endsWith('.etl')) {
-      setFile(selected); setDownloadUrl(''); setProgress(0); setStatus('idle');
-      toast.success('ETL File Ready');
+      setFile(selected); 
+      setDownloadUrl(''); 
+      setProgress(0); 
+      setStatus('idle');
+      toast.success('ETL File Selected');
     } else {
-      toast.error('Format Error: Please provide a .ETL file');
+      toast.error('Please upload a valid .ETL file');
     }
   }, []);
 
@@ -87,16 +90,28 @@ export default function App() {
     onDrop, accept: { 'application/octet-stream': ['.etl'] }, maxFiles: 1
   });
 
-  // Conversion API trigger
+  // Conversion process execution with real-time smooth progress
   const handleConvert = async () => {
     if (!vdiOnline) {
-      toast.error("Cannot convert: Netskope VDI server is offline.");
+      toast.error("Cannot convert: Server is offline.");
       return;
     }
     if (!file) return;
     
     setStatus('converting'); 
-    setProgress(30);
+    setProgress(5);
+    
+    // Smooth progress ticker for background conversion phase
+    const progressInterval = setInterval(() => {
+      setProgress((prev) => {
+        if (prev >= 92) {
+          clearInterval(progressInterval);
+          return 92; // Pause at 92% until server process completes
+        }
+        return prev + 2; // Increment smoothly every 200ms
+      });
+    }, 200);
+
     const formData = new FormData();
     formData.append('file', file);
     
@@ -106,8 +121,15 @@ export default function App() {
           ...axiosConfig.headers,
           "Content-Type": "multipart/form-data"
         },
+        onUploadProgress: (progressEvent) => {
+          const percent = Math.round((progressEvent.loaded * 100) / progressEvent.total);
+          // Scale upload phase to the first 40% of overall progress
+          setProgress(Math.min(Math.round(percent * 0.4), 40));
+        },
         timeout: 0 
       });
+
+      clearInterval(progressInterval);
 
       if (res.data.success) {
         setProgress(100);
@@ -124,14 +146,15 @@ export default function App() {
           }, 
           ...prev
         ]);
-        toast.success('Conversion Successful!');
+        toast.success('Conversion Complete!');
       } else {
         throw new Error("Conversion failed");
       }
     } catch (err) { 
+      clearInterval(progressInterval);
       setStatus('idle'); 
       setProgress(0);
-      toast.error('Netskope Server Transmission Error'); 
+      toast.error('Server Transmission Error'); 
     }
   };
 
