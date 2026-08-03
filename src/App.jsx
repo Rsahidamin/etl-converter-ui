@@ -366,13 +366,6 @@ export default function App() {
 
       </main>
 
-      {/* Footer */}
-      <footer className="w-full max-w-5xl text-center py-4 relative z-10">
-        <p className="text-[11px] font-medium tracking-wide text-slate-400">
-          Designed & Developed by <span className="font-bold text-slate-200">Sahil Amin & Salman Mahajan</span>
-        </p>
-      </footer>
-
     </div>
   );
 }
